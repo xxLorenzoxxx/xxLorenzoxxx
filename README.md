@@ -1,9 +1,12 @@
-# ChunkBots – Fabric-Mod für Minecraft 26.2
+# ChunkBots – Stresstest-Mod für Minecraft 26.2 (Fabric)
 
-Server-Mod, die **Bots an verschiedenen Orten auf der Welt verteilt**. Jeder Bot hält die
+Mit dieser Mod testest du, wie viel dein Server aushält. Sie **Bots an verschiedenen Orten auf der Welt verteilt**. Jeder Bot hält die
 Chunks in seiner **Sichtweite** geladen, wie ein Spieler, der dort steht. Du legst fest,
 **wie viele Bots** es gibt und **welche Sichtweite** sie haben.
 
+- **Stresstest:** Mit `/chunkbots laufen <tempo>` laufen alle Bots los wie Spieler, die die Welt
+  erkunden. Dabei werden ständig neue Chunks geladen und generiert und alte freigegeben.
+- Alle 10 Sekunden schreibt die Mod einen Bericht ins Server-Log (Bots, Chunks, MSPT, TPS).
 - Läuft nur auf dem Server. Spieler brauchen die Mod nicht.
 - Die Bots werden in `config/chunkbots.json` gespeichert und nach einem Neustart wieder geladen.
 - Chunks werden nach und nach geladen (Standard: 40 pro Tick), damit der Server nicht hängt.
@@ -38,7 +41,9 @@ Du brauchst OP (Level 2). `/bots` ist eine Kurzform für `/chunkbots`.
 | `/chunkbots remove <name>` | Entfernt einen Bot. |
 | `/chunkbots clear` | Entfernt alle Bots. |
 | `/chunkbots list` | Zeigt alle Bots mit Dimension und Position. |
-| `/chunkbots status` | Zeigt, wie viele Bots und Chunks es gibt und was noch in der Warteschlange ist. |
+| `/chunkbots status` | Zeigt Bots, geladene Chunks, Warteschlange, MSPT und TPS. |
+| `/chunkbots laufen <blöckeProSekunde>` | Alle Bots laufen los (Gehen 4.3, Sprinten 5.6, Elytra ca. 30). `0` = stehen bleiben. |
+| `/chunkbots stop` | Beendet den Stresstest: Bots anhalten und alle entfernen. |
 | `/chunkbots sichtweite <name\|alle> <sichtweite>` | Ändert die Sichtweite eines Bots oder aller Bots. |
 | `/chunkbots speed <chunksProTick>` | Legt fest, wie viele Chunks pro Tick geladen werden. |
 
@@ -53,6 +58,24 @@ Bots landen in der Dimension, in der du den Befehl ausführst (Overworld, Nether
 /chunkbots add Farm 3 1200 -800
 ```
 
+### Typischer Stresstest
+
+```
+/chunkbots random 20 10 3000   -> 20 Bots mit Sichtweite 10 verteilen
+/chunkbots status              -> warten, bis die Warteschlange bei 0 ist
+/chunkbots laufen 10           -> alle Bots laufen mit 10 Blöcken/s los
+/chunkbots status              -> MSPT und TPS beobachten
+/chunkbots stop                -> Test beenden
+```
+
+**So liest du die Werte:** Unter 50 MSPT hält der Server 20 TPS und läuft flüssig. Steigt
+die Warteschlange immer weiter an, laufen die Bots schneller, als Chunks geladen werden.
+Dann mit `/chunkbots speed <zahl>` mehr Chunks pro Tick laden lassen. Das belastet den
+Server zusätzlich.
+
+Tipp: Teste in einer Kopie deiner Welt. Laufende Bots generieren viel neues Gelände, und
+dadurch wächst die Welt-Datei.
+
 Ein Bot mit Sichtweite `s` lädt `(2s+1)²` Chunks. Bei Sichtweite 10 sind das 441 Chunks.
 Viele Bots mit großer Sichtweite brauchen viel RAM und CPU.
 
@@ -63,6 +86,8 @@ Viele Bots mit großer Sichtweite brauchen viel RAM und CPU.
   "chunksPerTick": 40,
   "maxViewDistance": 32,
   "maxBots": 1000,
+  "moveSpeed": 0,
+  "logIntervalSeconds": 10,
   "bots": [ ... ]
 }
 ```

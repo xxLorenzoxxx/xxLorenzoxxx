@@ -1,6 +1,7 @@
 package de.lorenzo.chunkbots;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -30,6 +31,8 @@ import java.util.Set;
  * /chunkbots list                                        Alle Bots anzeigen
  * /chunkbots status                                      Übersicht
  * /chunkbots sichtweite &lt;name|alle&gt; &lt;sichtweite&gt;         Sichtweite ändern
+ * /chunkbots laufen &lt;blockProSekunde&gt;                   Bots laufen lassen (Stresstest, 0 = stehen)
+ * /chunkbots stop                                        Stresstest beenden: anhalten und alle Bots entfernen
  * /chunkbots speed &lt;chunksProTick&gt;                       Ladegeschwindigkeit
  * </pre>
  */
@@ -89,6 +92,12 @@ public final class BotCommand {
 								.then(Commands.argument("sichtweite", IntegerArgumentType.integer(0))
 										.executes(BotCommand::setViewDistance))))
 
+				.then(Commands.literal("laufen")
+						.then(Commands.argument("blockProSekunde", DoubleArgumentType.doubleArg(0, 200))
+								.executes(BotCommand::setMoveSpeed)))
+
+				.then(Commands.literal("stop").executes(BotCommand::stop))
+
 				.then(Commands.literal("speed")
 						.then(Commands.argument("chunksProTick", IntegerArgumentType.integer(1, 1000))
 								.executes(BotCommand::setSpeed))));
@@ -125,11 +134,12 @@ public final class BotCommand {
 				int x = cx + o[0] * step;
 				int z = cz + o[1] * step;
 				if (!occupied.add(key(x, z))) continue;
-				Bot bot = new Bot(BotManager.nextName(), dim, x, z, view);
+				Bot bot = Bot.atChunk(BotManager.nextName(), dim, x, z, view);
 				BotManager.add(bot);
 				created.add(bot);
 			}
 		}
+		BotManager.saveNow();
 		reportCreated(src, created, view);
 		return created.size();
 	}
@@ -165,10 +175,11 @@ public final class BotCommand {
 			}
 			if (!found) break;
 			occupied.add(key(bestX, bestZ));
-			Bot bot = new Bot(BotManager.nextName(), dim, bestX, bestZ, view);
+			Bot bot = Bot.atChunk(BotManager.nextName(), dim, bestX, bestZ, view);
 			BotManager.add(bot);
 			placedNow.add(bot);
 		}
+		BotManager.saveNow();
 		reportCreated(src, placedNow, view);
 		return placedNow.size();
 	}
@@ -191,8 +202,9 @@ public final class BotCommand {
 			bx = (int) Math.floor(pos.x);
 			bz = (int) Math.floor(pos.z);
 		}
-		Bot bot = new Bot(name, BotManager.dimensionId(src.getLevel()), bx >> 4, bz >> 4, view);
+		Bot bot = new Bot(name, BotManager.dimensionId(src.getLevel()), bx + 0.5, bz + 0.5, view, Math.random() * Math.PI * 2);
 		BotManager.add(bot);
+		BotManager.saveNow();
 		src.sendSuccess(() -> Component.literal("Bot " + name + " gesetzt bei X " + bot.blockX() + " Z " + bot.blockZ()
 				+ " (Sichtweite " + view + ", " + bot.chunkCount() + " Chunks)"), true);
 		return 1;
@@ -231,13 +243,29 @@ public final class BotCommand {
 	}
 
 	private static int status(CommandContext<CommandSourceStack> ctx) {
-		int bots = BotManager.bots().size();
-		int chunks = BotManager.loadedChunkCount();
-		int pending = BotManager.pendingChunks();
-		ctx.getSource().sendSuccess(() -> Component.literal("ChunkBots: " + bots + " Bots, " + chunks
-				+ " Chunks geladen gehalten, " + pending + " in der Warteschlange, "
-				+ BotManager.chunksPerTick() + " Chunks/Tick"), false);
-		return bots;
+		ctx.getSource().sendSuccess(() -> Component.literal("ChunkBots: " + BotManager.statusLine()
+				+ " | " + BotManager.chunksPerTick() + " Chunks/Tick"), false);
+		return BotManager.bots().size();
+	}
+
+	private static int setMoveSpeed(CommandContext<CommandSourceStack> ctx) {
+		double speed = DoubleArgumentType.getDouble(ctx, "blockProSekunde");
+		BotManager.setMoveSpeed(speed);
+		if (speed <= 0) {
+			ctx.getSource().sendSuccess(() -> Component.literal("Bots bleiben jetzt stehen"), true);
+		} else {
+			ctx.getSource().sendSuccess(() -> Component.literal("Bots laufen jetzt mit " + speed
+					+ " Blöcken/s (Gehen 4.3, Sprinten 5.6, Elytra ca. 30)"), true);
+		}
+		return 1;
+	}
+
+	private static int stop(CommandContext<CommandSourceStack> ctx) {
+		BotManager.setMoveSpeed(0);
+		int n = BotManager.clear();
+		ctx.getSource().sendSuccess(() -> Component.literal("Stresstest beendet: " + n
+				+ " Bots entfernt, Chunks werden freigegeben"), true);
+		return n;
 	}
 
 	private static int setViewDistance(CommandContext<CommandSourceStack> ctx) {
